@@ -1,3 +1,5 @@
+from typing import Optional
+
 import json
 import uuid
 
@@ -42,15 +44,15 @@ def create_card(
     return card
 
 
-def get_card(db: Session, card_id: uuid.UUID) -> KnowledgeCard | None:
+def get_card(db: Session, card_id: uuid.UUID) -> Optional[KnowledgeCard]:
     return db.get(KnowledgeCard, card_id)
 
 
 def list_cards(
     db: Session,
-    type_: str | None = None,
-    tag: str | None = None,
-    active: bool | None = True,
+    type_: Optional[str] = None,
+    tag: Optional[str] = None,
+    active: Optional[bool] = True,
 ) -> list[KnowledgeCard]:
     query = db.query(KnowledgeCard)
     if type_ is not None:

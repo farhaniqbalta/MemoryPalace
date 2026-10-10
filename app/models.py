@@ -1,3 +1,5 @@
+from typing import Optional
+
 import uuid
 from datetime import datetime, timezone
 
@@ -39,10 +41,10 @@ class KnowledgeCard(Base):
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    supersedes: Mapped[uuid.UUID | None] = mapped_column(
+    supersedes: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("knowledge_cards.id"), nullable=True
     )
-    embedding: Mapped[list[float] | None] = mapped_column(
+    embedding: Mapped[Optional[list[float]]] = mapped_column(
         Vector(settings.embedding_dimensions), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

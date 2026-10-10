@@ -1,3 +1,5 @@
+from typing import Optional
+
 import uuid
 from datetime import datetime
 
@@ -23,7 +25,7 @@ class CardResponse(BaseModel):
     content: dict
     tags: list[str]
     active: bool
-    supersedes: uuid.UUID | None
+    supersedes: Optional[uuid.UUID]
     created_at: datetime
 
     model_config = {"from_attributes": True}

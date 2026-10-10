@@ -1,3 +1,5 @@
+from typing import Optional
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -46,9 +48,9 @@ def get_card(card_id: uuid.UUID, db: Session = Depends(get_db)) -> CardResponse:
 
 @router.get("/cards", response_model=list[CardResponse])
 def list_cards(
-    type: str | None = None,
-    tag: str | None = None,
-    active: bool | None = True,
+    type: Optional[str] = None,
+    tag: Optional[str] = None,
+    active: Optional[bool] = True,
     db: Session = Depends(get_db),
 ) -> list[CardResponse]:
     return cards_core.list_cards(db, type_=type, tag=tag, active=active)

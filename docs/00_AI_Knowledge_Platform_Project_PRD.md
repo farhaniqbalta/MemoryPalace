@@ -70,8 +70,8 @@ The only user is Farhan, who has limited backend experience and prefers to discu
 | Embedding size | 1536 dimensions for both providers, so one vector(1536) column works for either. |
 | Database | PostgreSQL with pgvector, chosen for pgvector's maturity. |
 | Docker | Database only. App components run natively in a virtualenv for faster iteration. |
-| App stack | FastAPI, uvicorn, SQLAlchemy, psycopg2, alembic, python-telegram-bot, tenacity, pytest, httpx. |
-| SDKs | Anthropic for answers; Gemini and OpenAI SDKs for embeddings. |
+| App stack | FastAPI, uvicorn, SQLAlchemy, psycopg 3 (`psycopg[binary]`), alembic, python-telegram-bot, tenacity, pytest, httpx. |
+| SDKs | Anthropic (`claude-haiku-5-5`) for answers; Gemini and OpenAI SDKs for embeddings. |
 | Hosting | DigitalOcean Droplet. |
 
 ## 7. Data model (draft)
@@ -96,10 +96,19 @@ The `embedding_model` column records which model produced each vector. Vectors f
 - Poor retrieval: weak answers usually come from chunking choices, not the embedding model. Plan time to tune.
 - Provider changes: model names, limits, and free-tier terms change. Verify them in the vendors' docs before relying on them.
 
-## 10. Open questions
+## 10. Starting decisions and remaining questions
 
-- Which LLM model will write the answers?
-- What source types matter most in the first ingest, and roughly how much content?
-- Chunk size and overlap to start with?
-- How should re-ingesting an updated file work: replace its old chunks, or skip duplicates?
+Starting decisions agreed October 11, 2026:
+
+- Answers: `claude-haiku-5-5`, evaluated on the initial notes.
+- First ingestion: this repo's `docs/` folder, initially 5 Markdown files (approximately 16 KiB).
+- Chunking: target 500 tokens with 75-token overlap, preserving paragraph boundaries where possible. Define the token-counting method during implementation and enforce each provider's input limits separately.
+- Updated files: use a stable relative source path and replace that source's chunks in one transaction after all new embeddings succeed.
+- Embeddings: Gemini `gemini-embedding-001` by default; OpenAI `text-embedding-3-small` as the alternative, both configured for 1536 dimensions.
+- Migration: add chunk storage while preserving existing tables; inspect existing data before considering their removal.
+- Database driver: retain the existing psycopg 3 driver.
+
+Remaining questions:
+
+- Database inspection completed October 11, 2026: `memorypalace` has no public tables and no existing card data to preserve. The agreed additive migration approach remains unchanged.
 - Is a plain top-k search enough, or is a reranking step worth adding in Phase 2?
