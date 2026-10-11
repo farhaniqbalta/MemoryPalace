@@ -53,7 +53,6 @@ def _request(text: str, purpose: str) -> list[float]:
                 config=types.EmbedContentConfig(
                     output_dimensionality=settings.embedding_dimensions,
                     task_type="RETRIEVAL_DOCUMENT" if purpose == "document" else "RETRIEVAL_QUERY",
-                    auto_truncate=False,
                 ),
             )
         if not response.embeddings or len(response.embeddings) != 1:

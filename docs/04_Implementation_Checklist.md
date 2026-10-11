@@ -92,7 +92,7 @@ Embedding adapters implemented October 11, 2026:
 
 - `embed_text(text, purpose="document" | "query")` is the shared entry point for subsequent chunk ingestion and re-embedding work.
 - `embedding_identity()` returns the configured `provider:model` for storage and retrieval checks.
-- Gemini uses retrieval document/query task types and disables automatic input truncation; OpenAI uses the same model for both purposes.
+- Gemini uses retrieval document/query task types; ingestion limits input size conservatively; OpenAI uses the same model for both purposes.
 - Both request 1536 dimensions and validate/normalize finite nonzero vectors.
 - Clients are created lazily with 30-second timeouts. Transient transport, rate-limit, and server failures get at most three attempts; authentication and validation failures are not retried.
 - 14 mocked embedding tests passed with no AI API calls. Database setup now applies only to tests that require it.
@@ -172,13 +172,23 @@ Telegram implemented October 11, 2026:
 
 ### 9. Validate the local MVP
 
-- [ ] Update the existing tests for the chunk pipeline and run the suite.
-- [ ] Ingest a small folder of real notes and inspect stored chunks and metadata.
-- [ ] Ask questions with known answers and check both answers and cited sources.
-- [ ] Ask a question the notes cannot answer and inspect the response.
-- [ ] Switch embedding providers, re-embed, and repeat the known-answer checks.
-- [ ] Run the full flow through Telegram.
-- [ ] Update README commands and remove obsolete card-based instructions.
+- [x] Update the existing tests for the chunk pipeline and run the suite.
+- [x] Ingest a small folder of real notes and inspect stored chunks and metadata.
+- [x] Ask questions with known answers and check both answers and cited sources.
+- [x] Ask a question the notes cannot answer and inspect the response.
+- [ ] Switch embedding providers, re-embed, and repeat the known-answer checks. **Deferred by Farhan: Gemini only for now; mocked provider-switch tests passed.**
+- [x] Run the full flow through Telegram.
+- [x] Update README commands and remove obsolete card-based instructions.
+
+Live validation — October 11, 2026:
+
+- Full automated suite: 57 passed.
+- Live Gemini ingestion initially failed because `auto_truncate` is unsupported by the Gemini API. Removed that argument; 14 adapter tests passed afterward.
+- Successfully ingested all 5 `docs/` files as 18 chunks using `gemini:gemini-embedding-001`.
+- Live `/ask` through FastAPI's test client used Gemini query embeddings and Anthropic answers: the chunk-size question returned 500 tokens / 75 overlap with PRD and checklist sources.
+- An unrelated refrigerator-serial-number question returned insufficient information and no sources.
+- Telegram owner ID configured locally. Farhan confirmed the bot is responding on October 11, 2026; live Telegram flow passed.
+- Live OpenAI provider switching is deferred by Farhan; Gemini remains the active provider. The OpenAI adapter remains available but has only mocked validation.
 
 ### 10. Deploy to a DigitalOcean Droplet
 
@@ -189,6 +199,11 @@ Telegram implemented October 11, 2026:
 - [ ] Keep database and API access restricted to what the deployment requires.
 - [ ] Verify logs and a basic database backup/restore procedure.
 - [ ] Confirm answers and sources work through Telegram after a server restart.
+
+Deployment preparation: `scripts/deploy.sh`, `deploy/compose.yml`, and
+`deploy/README.md` are ready for server review. Local Bash syntax/help checks passed.
+Server installation, service startup, reboot, and backup/restore remain unchecked
+until verified on the Droplet.
 
 ### Phase 1 completion
 

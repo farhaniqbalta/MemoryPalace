@@ -41,7 +41,6 @@ def test_provider_request_and_normalization(provider, name, purpose):
     assert embeddings.embedding_identity() == f"{name}:{kwargs['model']}"
     if name == "gemini":
         assert kwargs["config"].output_dimensionality == 1536
-        assert kwargs["config"].auto_truncate is False
         assert kwargs["config"].task_type == ("RETRIEVAL_DOCUMENT" if purpose == "document" else "RETRIEVAL_QUERY")
     else:
         assert kwargs["dimensions"] == 1536

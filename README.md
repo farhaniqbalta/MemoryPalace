@@ -203,5 +203,17 @@ messages are processed; other users and group chats are ignored.
 - Use `/search <query>` to inspect retrieved chunks, source names, and scores.
 - Ingest files through the script/API; Telegram messages ask questions.
 
-Telegram behavior has been checked with 20 mocked HTTP tests; live polling and
-provider calls still need end-to-end validation.
+Telegram behavior has been checked with 20 mocked HTTP tests. Live Gemini ingestion,
+Anthropic answers, and Telegram responses were validated on October 11, 2026.
+Live OpenAI provider switching is deferred; Gemini is the active provider.
+
+## Deployment
+
+Use [the Ubuntu deployment guide](deploy/README.md) and `scripts/deploy.sh` to run
+PostgreSQL in Docker and the app/bot under systemd on a Droplet. Deployment is
+prepared but not yet verified on a server.
+
+Pushes to `main` trigger `.github/workflows/deploy.yml`: GitHub Actions connects
+by SSH, fetches the pushed commit, and runs the deployment script on the Droplet.
+Complete the one-time server and GitHub `production` secret setup in the deployment
+guide to activate it. Server `.env` and stored chunks persist across redeploys.
