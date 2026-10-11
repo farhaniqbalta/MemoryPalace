@@ -53,7 +53,7 @@ fi
 python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
 sudo docker compose version
 python3 -m venv venv
-venv/bin/python -m pip install -r requirements.txt
+venv/bin/python -m pip install --no-cache-dir -r requirements.txt
 # Parse .env as configuration, never execute it as shell code.
 venv/bin/python - <<'PY'
 from dotenv import dotenv_values
