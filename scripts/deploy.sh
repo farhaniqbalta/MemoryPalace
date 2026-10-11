@@ -35,7 +35,9 @@ if [[ ! -f .env ]]; then
 fi
 chmod 600 .env
 if $non_interactive; then
-  sudo -n -v
+  # `sudo -v` follows verifypw policy and can prompt even with NOPASSWD commands.
+  # Execute a harmless command to check the permission actually needed by CI.
+  sudo -n true
 else
   sudo -v
 fi
