@@ -60,6 +60,6 @@ jobs:
             exit 0
           fi
           git checkout --detach "$2"
-          bash scripts/deploy.sh
+          bash scripts/deploy.sh --non-interactive
           echo "Deployed commit: $(git rev-parse HEAD)"
           REMOTE

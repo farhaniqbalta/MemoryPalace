@@ -4,12 +4,14 @@ set -euo pipefail
 
 install_system=false
 ingest_docs=false
+non_interactive=false
 for arg in "$@"; do
   case "$arg" in
     --install-system) install_system=true ;;
     --ingest-docs) ingest_docs=true ;;
+    --non-interactive) non_interactive=true ;;
     --help|-h)
-      echo 'Usage: bash scripts/deploy.sh [--install-system] [--ingest-docs]'
+      echo 'Usage: bash scripts/deploy.sh [--install-system] [--ingest-docs] [--non-interactive]'
       echo 'Run inside the server checkout as a non-root sudo-capable user.'
       echo 'Requires a configured .env. Stops existing app services during deployment.'
       exit 0 ;;
@@ -32,7 +34,11 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 chmod 600 .env
-sudo -n -v
+if $non_interactive; then
+  sudo -n -v
+else
+  sudo -v
+fi
 if $install_system; then
   . /etc/os-release
   if [[ "$ID" != ubuntu || "$VERSION_ID" != 24.04 ]]; then
