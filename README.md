@@ -33,28 +33,28 @@ current scope.
 
 ## Current implementation
 
-**The code still implements the earlier Knowledge Card design.** The revised PRD
-defines the intended direction; the application has not yet been migrated to it.
+**The API now uses document chunks for ingestion, search, and answers.**
+Knowledge Card models, extraction, and supersession routes have been removed.
+Legacy database tables remain preserved by the migration history.
 
-- `app/core/extraction.py` — Claude extracts one structured Knowledge Card from text.
-- `app/core/cards.py` — creates, lists, retrieves, and supersedes cards.
-- `app/core/embeddings.py` — OpenAI embeddings, currently `text-embedding-3-small`.
-- `app/core/search.py` — cosine similarity search over active cards using pgvector.
-- `app/core/rag.py` — retrieves cards and asks Claude to answer from their content.
-- `app/api/` — `/ingest`, `/cards`, `/cards/{card_id}`,
-  `/cards/{card_id}/supersede`, `/search`, and `/ask`.
-- `bot/telegram_bot.py` — plain messages ingest text; `/ask` and `/search` call the API.
-- `migrations/` and `tests/` — schema migration and tests for the existing card pipeline.
+- `app/core/ingestion.py` — token chunking and atomic source replacement.
+- `scripts/ingest.py` — text/Markdown file and folder ingestion.
+- `app/core/embeddings.py` — Gemini/OpenAI embeddings with validation and retries.
+- `app/core/search.py` — chunk cosine search with model-identity checks.
+- `app/core/rag.py` — grounded answers with validated chunk citation IDs.
+- `app/api/` — `/ingest`, `/search`, and `/ask`.
+- `app/models.py` — `Chunk` model.
+- `migrations/` — legacy schema plus additive chunk-storage migration.
+- `tests/` — mocked-provider ingestion, retrieval, citations, and API tests.
+- `scripts/verify_chunk_storage.py` — migration and ORM verification.
+- `bot/telegram_bot.py` — owner-only private-chat answers and chunk search.
 
-Runtime readiness and end-to-end behavior still need verification.
+Full suite: 32 tests passed with AI calls mocked. Live provider behavior and answers
+on real documents remain to be verified.
 
 ## Work needed for the revised MVP
 
-- Replace the card schema and extraction flow with chunk storage and chunking.
-- Add plain text / Markdown file and folder ingestion.
-- Add Gemini embeddings, provider configuration, and a re-embedding script.
-- Adapt retrieval, answers, and source reporting to chunks and source files.
-- Restrict Telegram access to the configured owner account.
+- Validate live embedding providers and the complete ingestion/query flow.
 - Update migrations and tests, then validate with real notes and deploy.
 
 Agreed starting choices: 500-token chunks with 75-token overlap; re-ingesting a
@@ -69,7 +69,7 @@ Settings load from `.env`; existing process environment variables take precedenc
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL connection URL, using psycopg 3. |
 | `ANTHROPIC_API_KEY` | Credential for answers (and legacy extraction). |
-| `GEMINI_API_KEY` | Credential for the planned Gemini embedding adapter. |
+| `GEMINI_API_KEY` | Credential for Gemini embeddings. |
 | `OPENAI_API_KEY` | Credential for OpenAI embeddings. |
 | `CLAUDE_MODEL` | `claude-haiku-5-5`. |
 | `EMBEDDING_PROVIDER` | `gemini` (default) or `openai`; other values are rejected. |
@@ -77,20 +77,21 @@ Settings load from `.env`; existing process environment variables take precedenc
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small`. |
 | `EMBEDDING_MODEL` | Optional explicit model override; leave unset for provider-based selection. |
 | `EMBEDDING_DIMENSIONS` | Fixed at 1536; other values are rejected. |
-| `TELEGRAM_BOT_TOKEN` | Bot credential. |
-| `TELEGRAM_OWNER_ID` | Positive numeric owner ID; access enforcement is pending. |
+| `TELEGRAM_BOT_TOKEN` | Bot credential; required to start the bot. |
+| `TELEGRAM_OWNER_ID` | Positive numeric owner ID; required, checked before every request. |
 | `API_BASE_URL` | `http://localhost:8000`. |
 
-Keys may remain empty for configuration/database checks. AI operations need the
-relevant credentials; the legacy API still initializes clients on import.
-Provider switching will work once adapters and re-embedding are implemented.
+Keys may remain empty for configuration/database checks and API startup. AI operations
+require the selected embedding key and the Anthropic key for nonempty answer context.
+Provider adapters are implemented; switching stored knowledge safely still requires
+the re-embedding script; retrieval already rejects mismatched models.
 The existing virtualenv uses Python 3.9; annotation compatibility has been fixed,
 but its Google dependencies warn about Python end of life and system LibreSSL.
 Use a maintained Python with OpenSSL when rebuilding the environment.
 
 ## Running the existing code locally
 
-These commands run the current card-based implementation.
+These commands start the chunk-based API and owner-only Telegram bot.
 
 1. Start the database. If you use Colima on macOS, run `colima start` first.
 
@@ -109,8 +110,8 @@ These commands run the current card-based implementation.
 3. Copy `.env.example` to `.env` if `.env` does not already exist. Configure
    `DATABASE_URL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `TELEGRAM_BOT_TOKEN`.
    Set `CLAUDE_MODEL` to the answer/extraction model you intend to use.
-   `EMBEDDING_PROVIDER` is validated by configuration; provider adapters are still
-   pending, so the existing card-based pipeline is not ready to use Gemini.
+   `EMBEDDING_PROVIDER` selects the implemented adapter. The API is still card-based;
+   use the forthcoming chunk pipeline for provider switching with model-identity checks.
 
 4. Apply the current migration and run tests.
 
@@ -128,7 +129,8 @@ These commands run the current card-based implementation.
    uvicorn app.api.main:app --reload
    ```
 
-6. In a second terminal with the virtualenv activated, start the bot.
+6. Configure `TELEGRAM_OWNER_ID` and `TELEGRAM_BOT_TOKEN`, then start the bot
+   in a second activated terminal.
 
    ```bash
    python -m bot.telegram_bot
@@ -142,3 +144,64 @@ These commands run the current card-based implementation.
   questions, an MCP search server, and additional source types such as PDFs and web pages.
 - **Phase 3 — Agentic (optional):** a small agent that decides when and how to
   search, considered only after Phases 1 and 2 work.
+
+## Ingesting text and Markdown
+
+Configure the selected embedding provider's key and apply migrations first.
+
+```bash
+python -m scripts.ingest docs
+python -m scripts.ingest /path/to/notes --root /path/to
+```
+
+The root defines stable source names (for example, `docs/example.md`). Reuse the
+same root when updating files. Each source is replaced atomically; folder ingestion
+reports per-file failures and exits with a nonzero status if any fail. Empty files
+are skipped. The first tokenizer use downloads its vocabulary cache.
+
+The API accepts file content rather than reading arbitrary server paths:
+
+```json
+{"source": "notes/example.md", "content": "Your Markdown text", "metadata": {"format": "md"}}
+```
+
+POST this JSON to `/ingest`; the response reports `source`, `chunks_created`, and
+`chunk_ids`. Ingestion calls the selected embedding provider. Query with `/search` (`query`, optional `top_k`) or `/ask` (`question`, optional
+`top_k`). Answers include cited source files separately from all retrieved chunks.
+Changing the embedding provider/model requires re-embedding; otherwise queries
+return HTTP 409.
+
+## Switching embedding providers
+
+Change `EMBEDDING_PROVIDER` in `.env`, configure that provider's key, and leave
+`EMBEDDING_MODEL` unset unless overriding its default. Restart the API/bot so they
+use the same settings, then run:
+
+```bash
+python -m scripts.reembed
+```
+
+Each successful chunk saves its new vector and model identity in one transaction.
+Failed chunks keep their old vectors. If interrupted, run the command again: chunks
+already using the target model are skipped. The script reports progress and returns
+a nonzero exit status if failures or mismatched chunks remain. Use `--force` to
+regenerate even chunks already marked with the selected model.
+
+Retrieval rejects mixed/mismatched model identities until re-embedding completes.
+Keep ingestion paused and use one re-embedding process during a provider switch.
+Concurrent content changes are skipped rather than overwritten; a subsequent run
+can process any remaining chunks. A force run interrupted halfway can be restarted
+with `--force` to regenerate all chunks again.
+
+## Telegram usage
+
+Set `TELEGRAM_OWNER_ID` to your numeric Telegram account ID (not your username).
+The bot refuses to start without it and a bot token. Only that account's private
+messages are processed; other users and group chats are ignored.
+
+- Send plain text or `/ask <question>` to get an answer with cited source files.
+- Use `/search <query>` to inspect retrieved chunks, source names, and scores.
+- Ingest files through the script/API; Telegram messages ask questions.
+
+Telegram behavior has been checked with 20 mocked HTTP tests; live polling and
+provider calls still need end-to-end validation.

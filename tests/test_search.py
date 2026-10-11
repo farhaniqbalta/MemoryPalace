@@ -1,61 +1,39 @@
 from unittest.mock import patch
 
-from app.core import cards as cards_core
-from app.core.search import search_cards
+import pytest
+
+from app.core.embeddings import embedding_identity
+from app.core.search import EmbeddingModelMismatch, search_chunks
+from app.models import Chunk
 
 
-def fake_embed(text: str) -> list[float]:
-    vec = [0.0] * 1536
-    if "postgres" in text.lower():
-        vec[0] = 1.0
-    else:
-        vec[1] = 1.0
-    return vec
+def add(db, source, vector, identity=None):
+    row = Chunk(source=source, chunk_index=0, content=source, source_metadata={},
+                embedding=vector, embedding_model=identity or embedding_identity())
+    db.add(row)
+    db.commit()
+    return row
 
 
-@patch("app.core.search.embed_text", side_effect=fake_embed)
-@patch("app.core.cards.embed_text", side_effect=fake_embed)
-def test_search_ranks_by_similarity(mock_cards_embed, mock_search_embed, db_session):
-    raw = cards_core.create_raw_source(db_session, "test", "raw")
-    postgres_card = cards_core.create_card(
-        db_session,
-        raw,
-        type_="Decision",
-        title="Why Postgres",
-        content={"reason": "pgvector"},
-        tags=["postgres"],
-    )
-    cards_core.create_card(
-        db_session,
-        raw,
-        type_="Decision",
-        title="Why Telegram",
-        content={"reason": "bot ui"},
-        tags=["telegram"],
-    )
-
-    results = search_cards(db_session, "why did we choose postgres?", top_k=2)
-
-    assert results[0][0].id == postgres_card.id
-    assert results[0][1] > results[1][1]
+def test_ranking_and_query_purpose(db_session):
+    a = add(db_session, 'postgres.md', [1.] + [0.] * 1535)
+    add(db_session, 'other.md', [0., 1.] + [0.] * 1534)
+    with patch('app.core.search.embed_text', return_value=[1.] + [0.] * 1535) as embed:
+        rows = search_chunks(db_session, 'postgres', 2)
+    assert rows[0][0].id == a.id
+    assert rows[0][1] > rows[1][1]
+    embed.assert_called_once_with('postgres', purpose='query')
 
 
-@patch("app.core.search.embed_text", side_effect=fake_embed)
-@patch("app.core.cards.embed_text", side_effect=fake_embed)
-def test_search_excludes_inactive_cards(mock_cards_embed, mock_search_embed, db_session):
-    raw = cards_core.create_raw_source(db_session, "test", "raw")
-    old = cards_core.create_card(
-        db_session,
-        raw,
-        type_="Decision",
-        title="Why Postgres",
-        content={"reason": "old"},
-        tags=[],
-    )
-    cards_core.supersede_card(
-        db_session, old, type_="Decision", title="Why Postgres v2", content={"reason": "new"}, tags=[]
-    )
+def test_model_mismatch_before_api_call(db_session):
+    add(db_session, 'old.md', [1.] + [0.] * 1535, 'different:model')
+    with patch('app.core.search.embed_text') as embed:
+        with pytest.raises(EmbeddingModelMismatch):
+            search_chunks(db_session, 'query')
+    embed.assert_not_called()
 
-    results = search_cards(db_session, "why postgres", top_k=5)
 
-    assert old.id not in [card.id for card, _ in results]
+def test_empty_database_skips_embedding(db_session):
+    with patch('app.core.search.embed_text') as embed:
+        assert search_chunks(db_session, 'query') == []
+    embed.assert_not_called()

@@ -17,7 +17,7 @@ def _test_db_url() -> str:
     return settings.database_url.rsplit("/", 1)[0] + f"/{TEST_DB_NAME}"
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def _test_database():
     admin_engine = create_engine(_admin_url(), isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
@@ -39,7 +39,7 @@ def _test_database():
 
 
 @pytest.fixture()
-def db_session():
+def db_session(_test_database):
     engine = create_engine(_test_db_url())
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     session = SessionLocal()

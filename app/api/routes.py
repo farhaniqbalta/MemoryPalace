@@ -1,85 +1,39 @@
-from typing import Optional
-
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core import cards as cards_core
-from app.core.extraction import extract_card
+from app.core.ingestion import ingest_text, normalize_source
 from app.core.rag import answer_question
-from app.core.search import search_cards
+from app.core.search import EmbeddingModelMismatch, search_chunks
 from app.db import get_db
-from app.schemas import (
-    AskRequest,
-    AskResponse,
-    CardResponse,
-    IngestRequest,
-    SearchRequest,
-    SearchResult,
-    SupersedeRequest,
-)
+from app.schemas import AskRequest, AskResponse, IngestRequest, IngestResponse, SearchRequest, SearchResult
 
 router = APIRouter()
 
 
-@router.post("/ingest", response_model=CardResponse)
-def ingest(payload: IngestRequest, db: Session = Depends(get_db)) -> CardResponse:
-    raw_source = cards_core.create_raw_source(db, payload.source_type, payload.content)
-    extracted = extract_card(payload.content)
-    card = cards_core.create_card(
-        db,
-        raw_source,
-        type_=extracted["type"],
-        title=extracted["title"],
-        content=extracted["content"],
-        tags=extracted.get("tags", []),
-    )
-    return card
-
-
-@router.get("/cards/{card_id}", response_model=CardResponse)
-def get_card(card_id: uuid.UUID, db: Session = Depends(get_db)) -> CardResponse:
-    card = cards_core.get_card(db, card_id)
-    if card is None:
-        raise HTTPException(status_code=404, detail="Card not found")
-    return card
-
-
-@router.get("/cards", response_model=list[CardResponse])
-def list_cards(
-    type: Optional[str] = None,
-    tag: Optional[str] = None,
-    active: Optional[bool] = True,
-    db: Session = Depends(get_db),
-) -> list[CardResponse]:
-    return cards_core.list_cards(db, type_=type, tag=tag, active=active)
-
-
-@router.post("/cards/{card_id}/supersede", response_model=CardResponse)
-def supersede_card(
-    card_id: uuid.UUID, payload: SupersedeRequest, db: Session = Depends(get_db)
-) -> CardResponse:
-    old_card = cards_core.get_card(db, card_id)
-    if old_card is None:
-        raise HTTPException(status_code=404, detail="Card not found")
-    return cards_core.supersede_card(
-        db,
-        old_card,
-        type_=payload.type,
-        title=payload.title,
-        content=payload.content,
-        tags=payload.tags,
-    )
+@router.post("/ingest", response_model=IngestResponse)
+def ingest(payload: IngestRequest, db: Session = Depends(get_db)):
+    try:
+        source = normalize_source(payload.source)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    rows = ingest_text(db, source, payload.content, payload.metadata)
+    return IngestResponse(source=source, chunks_created=len(rows), chunk_ids=[row.id for row in rows])
 
 
 @router.post("/search", response_model=list[SearchResult])
-def search(payload: SearchRequest, db: Session = Depends(get_db)) -> list[SearchResult]:
-    results = search_cards(db, payload.query, top_k=payload.top_k)
-    return [SearchResult(card=card, score=score) for card, score in results]
+def search(payload: SearchRequest, db: Session = Depends(get_db)):
+    try:
+        results = search_chunks(db, payload.query, payload.top_k)
+    except EmbeddingModelMismatch as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return [SearchResult(chunk=chunk, score=score) for chunk, score in results]
 
 
 @router.post("/ask", response_model=AskResponse)
-def ask(payload: AskRequest, db: Session = Depends(get_db)) -> AskResponse:
-    answer, cards = answer_question(db, payload.question, top_k=payload.top_k)
-    return AskResponse(answer=answer, cited_cards=cards)
+def ask(payload: AskRequest, db: Session = Depends(get_db)):
+    try:
+        answer, cited, retrieved = answer_question(db, payload.question, payload.top_k)
+    except EmbeddingModelMismatch as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return AskResponse(answer=answer, sources=list(dict.fromkeys(c.source for c in cited)),
+                       cited_chunks=cited, retrieved_chunks=retrieved)

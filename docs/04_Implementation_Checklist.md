@@ -64,56 +64,111 @@ Configuration and environment implementation verified October 11, 2026:
 
 ### 3. Chunk storage and migration
 
-- [ ] Add the `chunks` model: id, source, chunk_index, content, metadata, embedding, embedding_model, created_at.
-- [ ] Use a `vector(1536)` column and record an unambiguous provider/model identity.
-- [ ] Create an Alembic migration, following the agreed handling of existing data.
-- [ ] Verify migration on a fresh database and on the existing schema.
-- [ ] Remove obsolete card models, extraction, supersession, and routes once their replacements work.
+- [x] Add the `chunks` model: id, source, chunk_index, content, metadata, embedding, embedding_model, created_at.
+- [x] Use a `vector(1536)` column and record an unambiguous provider/model identity.
+- [x] Create an Alembic migration, following the agreed handling of existing data.
+- [x] Verify migration on a fresh database and on the existing schema.
+- [x] Remove obsolete card models, extraction, supersession, and routes once their replacements work.
+
+Chunk storage verified October 11, 2026:
+
+- Migration `0002` applied locally through the existing `0001` migration chain.
+- `chunks` has unique `(source, chunk_index)` and nonnegative chunk-index constraints.
+- JSON column `metadata` maps to `source_metadata` in Python because SQLAlchemy reserves `metadata`.
+- Embedding identity uses `provider:model`, such as `gemini:gemini-embedding-001`.
+- `scripts/verify_chunk_storage.py` verified a fresh database, the `0001` → `0002` upgrade, legacy-table preservation, vector size, and an ORM round-trip.
+- Verification uses `memorypalace_migration_check`, retained for inspection; the inserted verification row was rolled back.
+- Legacy app code and card routes were removed when chunk retrieval and answers became functional in checklist 6; old database tables remain preserved.
 
 ### 4. Embedding providers
 
-- [ ] Implement one embedding interface used by ingestion, query, and re-embedding.
-- [ ] Implement Gemini and OpenAI adapters with 1536-dimensional output.
-- [ ] Use the same embedding model for stored chunks and questions, with provider-specific document/query settings where required.
-- [ ] Validate returned vector dimensions and handle API failures with bounded retries.
-- [ ] Test provider selection and error handling with mocked API calls.
+- [x] Implement one embedding interface used by ingestion, query, and re-embedding.
+- [x] Implement Gemini and OpenAI adapters with 1536-dimensional output.
+- [x] Use the same embedding model for stored chunks and questions, with provider-specific document/query settings where required.
+- [x] Validate returned vector dimensions and handle API failures with bounded retries.
+- [x] Test provider selection and error handling with mocked API calls.
+
+Embedding adapters implemented October 11, 2026:
+
+- `embed_text(text, purpose="document" | "query")` is the shared entry point for subsequent chunk ingestion and re-embedding work.
+- `embedding_identity()` returns the configured `provider:model` for storage and retrieval checks.
+- Gemini uses retrieval document/query task types and disables automatic input truncation; OpenAI uses the same model for both purposes.
+- Both request 1536 dimensions and validate/normalize finite nonzero vectors.
+- Clients are created lazily with 30-second timeouts. Transient transport, rate-limit, and server failures get at most three attempts; authentication and validation failures are not retried.
+- 14 mocked embedding tests passed with no AI API calls. Database setup now applies only to tests that require it.
+- Model-mismatch protection in chunk retrieval and input token bounds remain in the ingestion/retrieval sections. Legacy cards do not record model identity; use the forthcoming chunk pipeline for safe provider switching.
 
 ### 5. File ingestion and chunking
 
-- [ ] Read UTF-8 text and Markdown files and retain their source names.
-- [ ] Implement chunking with the agreed size and overlap; skip empty content.
-- [ ] Embed chunks and persist content, source, chunk index, metadata, and model identity.
-- [ ] Implement the agreed duplicate/updated-file behavior.
-- [ ] Avoid partially replacing a source when embedding or storage fails.
-- [ ] Add a command-line script for a file or folder, with a useful ingestion summary.
-- [ ] Adapt the FastAPI ingest endpoint and validate its inputs.
-- [ ] Test chunk boundaries, empty files, ingestion failures, and re-ingestion behavior.
+- [x] Read UTF-8 text and Markdown files and retain their source names.
+- [x] Implement chunking with the agreed size and overlap; skip empty content.
+- [x] Embed chunks and persist content, source, chunk index, metadata, and model identity.
+- [x] Implement the agreed duplicate/updated-file behavior.
+- [x] Avoid partially replacing a source when embedding or storage fails.
+- [x] Add a command-line script for a file or folder, with a useful ingestion summary.
+- [x] Adapt the FastAPI ingest endpoint and validate its inputs.
+- [x] Test chunk boundaries, empty files, ingestion failures, and re-ingestion behavior.
+
+Ingestion implemented October 11, 2026:
+
+- `python -m scripts.ingest docs` reads text/Markdown recursively; `--root` controls stable relative source paths.
+- Chunk size uses tiktoken `cl100k_base`, targeting 500 tokens and 75-token overlap, with paragraph boundaries where practical and a conservative 2048-byte cap. This is not Gemini's native token count.
+- Empty files are skipped without deleting existing chunks. Updated files replace their source's chunks after embeddings succeed, inside a transaction serialized by a per-source PostgreSQL advisory lock.
+- `/ingest` accepts `source`, `content`, and optional `metadata`; returns source, chunk count, and chunk IDs. It does not accept server filesystem paths.
+- Tests cover Unicode, chunk limits, overlap, empty files, invalid sources, re-ingestion, embedding failure, database rollback, and folder handling, using mocked embeddings.
+- No real docs ingestion or paid embedding requests were performed. Search/answer endpoints and Telegram still need adaptation in subsequent sections.
 
 ### 6. Retrieval and answers
 
-- [ ] Embed the question and retrieve top-k chunks by cosine distance.
-- [ ] Prevent comparing a query with vectors from a different model, including during re-embedding.
-- [ ] Pass chunk content and source identifiers to Anthropic as context.
-- [ ] Ask the model to answer from the supplied material and say when it cannot answer.
-- [ ] Return the answer with source files actually cited; distinguish these from all retrieved candidates.
-- [ ] Adapt the query endpoint and validate question and top-k inputs.
-- [ ] Test retrieval ranking, model mismatch, empty results, and source reporting.
+- [x] Embed the question and retrieve top-k chunks by cosine distance.
+- [x] Prevent comparing a query with vectors from a different model, including during re-embedding.
+- [x] Pass chunk content and source identifiers to Anthropic as context.
+- [x] Ask the model to answer from the supplied material and say when it cannot answer.
+- [x] Return the answer with source files actually cited; distinguish these from all retrieved candidates.
+- [x] Adapt the query endpoint and validate question and top-k inputs.
+- [x] Test retrieval ranking, model mismatch, empty results, and source reporting.
+
+Retrieval and answers implemented October 11, 2026:
+
+- `/search` ranks chunks by cosine similarity. `/ask` returns `answer`, unique cited `sources`, `cited_chunks`, and all `retrieved_chunks`.
+- Mixed or mismatched model identities return HTTP 409 before query embedding. Retrieval also filters by configured identity to prevent cross-model comparisons during concurrent changes.
+- Empty databases skip AI calls. Anthropic uses forced structured answer output; citations must identify retrieved chunks. No citations produce an insufficient-information response; unknown citations are rejected.
+- Nonempty questions and top-k bounds (1–20) are validated. A valid citation identifies a retrieved source; it does not prove factual entailment, which still needs evaluation on real notes.
+- Removed active card models, extraction, supersession code, and routes. Legacy database tables and migration history remain preserved.
+- Full suite: 32 tests passed, all AI calls mocked. Telegram's old payloads still need adaptation in checklist 8.
 
 ### 7. Re-embedding
 
-- [ ] Add a script that regenerates embeddings from stored chunk content using the configured provider/model.
-- [ ] Update each vector and its model identity together.
-- [ ] Define safe behavior for interrupted runs so retrieval cannot mix embedding models.
-- [ ] Show progress, failures, and completion; make retrying an interrupted run safe.
-- [ ] Verify switching provider requires only configuration plus the script, with no code changes.
+- [x] Add a script that regenerates embeddings from stored chunk content using the configured provider/model.
+- [x] Update each vector and its model identity together.
+- [x] Define safe behavior for interrupted runs so retrieval cannot mix embedding models.
+- [x] Show progress, failures, and completion; make retrying an interrupted run safe.
+- [x] Verify switching provider requires only configuration plus the script, with no code changes.
+
+Re-embedding implementation:
+
+- Run `python -m scripts.reembed` after changing provider/model settings; `--force` regenerates already-current vectors too.
+- Commits each vector and its qualified model identity atomically. Failures retain old values; restarting skips completed rows.
+- Conditional updates avoid overwriting content/model changes made concurrently. Pause ingestion and use one re-embedding process during a provider switch.
+- Progress, failed chunk IDs, and mismatched-row counts are reported without submitted text or provider exception bodies. Failed/incomplete runs exit nonzero.
+- Retrieval blocks mismatched/mixed identities. Provider switching, interruption/resume, and rollback tested with mocked embeddings; live provider validation remains checklist 9.
 
 ### 8. Telegram
 
-- [ ] Check the sender's Telegram user ID before processing any command or message.
-- [ ] Send questions to the query endpoint and display answers with source names.
-- [ ] Decide how plain messages and the existing `/ask` and `/search` commands should behave under the revised design.
-- [ ] Handle API failures and replies exceeding Telegram's message limit.
-- [ ] Test owner access and rejection of other accounts without invoking AI APIs.
+- [x] Check the sender's Telegram user ID before processing any command or message.
+- [x] Send questions to the query endpoint and display answers with source names.
+- [x] Decide how plain messages and the existing `/ask` and `/search` commands should behave under the revised design.
+- [x] Handle API failures and replies exceeding Telegram's message limit.
+- [x] Test owner access and rejection of other accounts without invoking AI APIs.
+
+Telegram implemented October 11, 2026:
+
+- Plain text and `/ask` ask questions; `/search` shows source names, chunk indexes, scores, and excerpts. File ingestion remains in the CLI/API.
+- Every handler checks the configured owner ID before network calls or replies. Bot startup requires the owner ID and token. Responses are restricted to private chats to avoid exposing notes in groups.
+- Answers show cited source files. Long replies split safely within Telegram's UTF-16 length limit.
+- Timeouts, invalid responses, validation errors, and model mismatches return concise messages without raw API exception bodies.
+- 20 mocked Telegram/HTTP tests passed, including unauthorized users, groups, missing owner, owner requests, failures, and Unicode reply splitting.
+- Live Telegram polling has not been started. Fill `TELEGRAM_OWNER_ID` and `TELEGRAM_BOT_TOKEN` before checklist 9's live validation.
 
 ### 9. Validate the local MVP
 

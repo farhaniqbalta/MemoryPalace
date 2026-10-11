@@ -9,6 +9,7 @@ anthropic
 openai
 google-genai
 tenacity
+tiktoken
 python-telegram-bot
 httpx
 pytest
