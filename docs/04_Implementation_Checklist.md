@@ -227,3 +227,17 @@ until verified on the Droplet.
 - [ ] Decide whether an agent adds value; cut this phase if it does not.
 - [ ] If retained, define one small search task with limits on repeat searches.
 - [ ] Compare the agent's results and cost with the existing RAG flow.
+
+## Web interface — local implementation
+
+- [x] Sunset-themed HTML/CSS/JS shell and Playground with sample/live query modes.
+- [x] Sources listing with stored chunk counts and text/Markdown uploads.
+- [x] Streamed 64 KiB upload limit, filename/type/UTF-8 validation, and atomic source replacement.
+- [x] Seamless sunset Processes animation with pause/play and reduced-motion support.
+- [x] Read-only Settings endpoint and page showing actual provider/model configuration, without secrets.
+- [x] Mocked API tests for uploads and credential exclusion/read-only settings.
+- [ ] User browser verification of upload → question → cited chunks.
+- [ ] Decide domain and web access approach before public exposure.
+- [ ] Authentication, deployment request limits, and rate limiting before public use.
+
+Local work only. Farhan requested source deletion and raw-text input: both are implemented with source-specific deletion confirmation and bounded UTF-8 note input. Ask defaults to real local queries; sample mode remains optional.

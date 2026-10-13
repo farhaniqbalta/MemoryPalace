@@ -145,7 +145,7 @@ Starting decisions agreed October 11, 2026:
 - Re-embedding is already implemented: `python -m scripts.reembed`, with per-row atomic updates, resume behavior, and mixed-model retrieval blocking.
 - Gemini is active. Live OpenAI provider switching is deferred by Farhan; mocked switch tests passed.
 - Live validation ingested 5 repository docs into 18 chunks, answered a known question with sources, and declined an unsupported question. Automated suite had 57 passing tests at that validation point.
-- A local HTML/CSS/JS preview is implemented: shell, Playground, decorative Processes, placeholder Sources, and read-only default Settings. Live source listing/upload and web access controls remain planned. Reboot persistence and backup/restore verification remain outstanding unless separately confirmed.
+- The local HTML/CSS/JS interface includes Playground, a decorative sunset Processes animation, Sources listing/upload (UTF-8 text/Markdown, 64 KiB limit), and read-only Settings from actual configuration. Web authentication, rate limiting, and browser end-to-end validation remain pending. Reboot persistence and backup/restore verification remain outstanding unless separately confirmed.
 
 ### Remaining design questions
 

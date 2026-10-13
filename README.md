@@ -225,10 +225,14 @@ source venv/bin/activate
 uvicorn app.api.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-Open http://127.0.0.1:8001. Sample mode is the default and makes no AI calls.
-Enable **Use local API** to ask your stored notes using the configured providers;
+Open http://127.0.0.1:8001. Real queries are the default. Uncheck **Use local API** for sample answers without AI calls.
+Ask your stored notes using the configured providers;
 this requires the running database and API keys and consumes provider quota.
-Sources/upload functionality is still a placeholder. Processes is decorative;
-Settings shows agreed defaults, not live server state. Web auth remains pending.
+Sources lists stored files and accepts UTF-8 text/Markdown uploads up to 64 KiB.
+Uploads and raw-text notes use real embeddings. The same filename/title replaces
+its previous source. Confirmed deletion removes the selected source’s stored chunks
+without touching the original file.
+Processes embeds the decorative sunset workshop. Settings reads current provider/model
+configuration without exposing credentials. Web auth remains pending; test locally.
 This preview is for local testing; do not push it to the auto-deploying branch
 until ready for deployment.
