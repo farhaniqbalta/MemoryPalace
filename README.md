@@ -217,3 +217,18 @@ Pushes to `main` trigger `.github/workflows/deploy.yml`: GitHub Actions connects
 by SSH, fetches the pushed commit, and runs the deployment script on the Droplet.
 Complete the one-time server and GitHub `production` secret setup in the deployment
 guide to activate it. Server `.env` and stored chunks persist across redeploys.
+
+## Local web preview
+
+```bash
+source venv/bin/activate
+uvicorn app.api.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Open http://127.0.0.1:8001. Sample mode is the default and makes no AI calls.
+Enable **Use local API** to ask your stored notes using the configured providers;
+this requires the running database and API keys and consumes provider quota.
+Sources/upload functionality is still a placeholder. Processes is decorative;
+Settings shows agreed defaults, not live server state. Web auth remains pending.
+This preview is for local testing; do not push it to the auto-deploying branch
+until ready for deployment.

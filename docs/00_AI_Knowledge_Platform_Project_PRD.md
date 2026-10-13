@@ -1,6 +1,6 @@
 # MemoryPalace: Product Requirements Document
 
-**Author:** Farhan · **Status:** Draft v0.2 · **Date:** October 11, 2026
+**Author:** Farhan · **Status:** Draft v0.2 · **Date:** October 13, 2026
 
 ## 1. Overview
 
@@ -94,7 +94,7 @@ The only user is Farhan, who has limited backend experience and prefers to discu
 | Docker | Database only. App components run natively in a virtualenv for faster iteration. |
 | App stack | FastAPI, uvicorn, SQLAlchemy, psycopg 3 (`psycopg[binary]`), alembic, python-telegram-bot, tenacity, pytest, httpx. |
 | SDKs | Anthropic (`claude-haiku-5-5`) for answers; Gemini and OpenAI SDKs for embeddings. |
-| Hosting | DigitalOcean Droplet with 512 MB RAM; memory is constrained. Swap was added to address deployment OOM. |
+| Hosting | DigitalOcean Droplet upgraded to 1 GB RAM on October 13, 2026; keep the app lightweight. Swap was added to address deployment OOM. |
 | Deployment | GitHub Actions on pushes to `main`, SSH to Droplet, fetch the pushed commit, run deployment script, restart systemd services. |
 | Web stack | Planned static HTML/CSS/JavaScript served by FastAPI. |
 | Web access | Caddy HTTPS/basic auth with a domain, or private-access alternative; final choice pending. |
@@ -118,7 +118,7 @@ The `embedding_model` column records the qualified provider/model identity that 
 
 ## 9. Risks
 
-- Memory: the 512 MB Droplet has already encountered OOM during dependency installation. Keep the web layer lightweight, monitor RAM/swap, and resize if needed.
+- Memory: the original 512 MB Droplet encountered OOM during dependency installation. Keep the web layer lightweight, monitor RAM/swap, and resize if needed.
 - Web exposure: uploads and private knowledge require authentication, request limits, and loopback database/API binding.
 - Scope creep: Phase 3 is the main risk. Do not start it before Phase 1 and 2 work.
 - Privacy: Gemini's free tier may use submitted content to improve Google's products. Keep private material out until you accept that tradeoff, or switch to OpenAI.
@@ -145,14 +145,14 @@ Starting decisions agreed October 11, 2026:
 - Re-embedding is already implemented: `python -m scripts.reembed`, with per-row atomic updates, resume behavior, and mixed-model retrieval blocking.
 - Gemini is active. Live OpenAI provider switching is deferred by Farhan; mocked switch tests passed.
 - Live validation ingested 5 repository docs into 18 chunks, answered a known question with sources, and declined an unsupported question. Automated suite had 57 passing tests at that validation point.
-- Web interface is planned, not implemented. Reboot persistence and backup/restore verification remain outstanding unless separately confirmed.
+- A local HTML/CSS/JS preview is implemented: shell, Playground, decorative Processes, placeholder Sources, and read-only default Settings. Live source listing/upload and web access controls remain planned. Reboot persistence and backup/restore verification remain outstanding unless separately confirmed.
 
 ### Remaining design questions
 
 - Should the right-hand status panel be decorative, show real counts/provider information, or combine both with clear labels?
 - Keep the current Anthropic answer provider, or evaluate Gemini answers? Anthropic `claude-haiku-5-5` remains the accepted default until a new decision is made.
 - What domain and access approach should the web page use?
-- What upload size limit and rate limits fit the 512 MB server?
+- What upload size limit and rate limits fit the 1 GB server?
 - Should source deletion be included in web v1?
 - Start Phase 2 with an evaluation set or the MCP search server?
 - Is plain top-k retrieval sufficient, or do evaluation results justify reranking?
